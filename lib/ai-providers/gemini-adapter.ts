@@ -1,8 +1,4 @@
-import {
-  GoogleGenerativeAI,
-  SchemaType,
-  type GenerationConfig,
-} from '@google/generative-ai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { z } from 'zod';
 import type { ProviderAdapter, ProviderGenerateParams, ProviderGenerateResult } from './types';
 
@@ -81,7 +77,7 @@ function convertToGeminiSchema(jsonSchema: any): any {
     }
 
     return {
-      type: SchemaType.OBJECT,
+      type: Type.OBJECT,
       properties,
       required,
     };
@@ -89,10 +85,10 @@ function convertToGeminiSchema(jsonSchema: any): any {
 
   if (jsonSchema.type === 'array') {
     const arraySchema: Record<string, any> = {
-      type: SchemaType.ARRAY,
+      type: Type.ARRAY,
       items: jsonSchema.items
         ? convertToGeminiSchema(jsonSchema.items)
-        : { type: SchemaType.STRING },
+        : { type: Type.STRING },
     };
 
     if (typeof jsonSchema.minItems === 'number') {
@@ -106,7 +102,7 @@ function convertToGeminiSchema(jsonSchema: any): any {
   }
 
   if (jsonSchema.type === 'string') {
-    const stringSchema: Record<string, any> = { type: SchemaType.STRING };
+    const stringSchema: Record<string, any> = { type: Type.STRING };
     if (typeof jsonSchema.pattern === 'string') {
       stringSchema.pattern = jsonSchema.pattern;
     }
@@ -114,19 +110,26 @@ function convertToGeminiSchema(jsonSchema: any): any {
   }
 
   if (jsonSchema.type === 'number' || jsonSchema.type === 'integer') {
-    return { type: SchemaType.NUMBER };
+    return { type: Type.NUMBER };
   }
 
   if (jsonSchema.type === 'boolean') {
-    return { type: SchemaType.BOOLEAN };
+    return { type: Type.BOOLEAN };
   }
 
   if (Array.isArray(jsonSchema.enum)) {
-    // Gemini's SchemaType doesn't expose an explicit ENUM type; encode as string with enum constraint
-    return { type: SchemaType.STRING, enum: jsonSchema.enum } as any;
+    return { type: Type.STRING, enum: jsonSchema.enum } as any;
   }
 
-  return { type: SchemaType.STRING };
+  return { type: Type.STRING };
+}
+
+interface GenerationConfig {
+  temperature?: number;
+  topP?: number;
+  maxOutputTokens?: number;
+  responseMimeType?: string;
+  responseSchema?: any;
 }
 
 function buildGenerationConfig(params: ProviderGenerateParams): GenerationConfig {
@@ -203,7 +206,8 @@ export function createGeminiAdapter(): ProviderAdapter {
     );
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+  // New SDK: GoogleGenAI initialization
+  const ai = new GoogleGenAI({ apiKey });
 
   return {
     name: PROVIDER_NAME,
@@ -216,13 +220,21 @@ export function createGeminiAdapter(): ProviderAdapter {
       for (const modelName of models) {
         try {
           const generationConfig = buildGenerationConfig(params);
-          const model = genAI.getGenerativeModel({
-            model: modelName,
-            generationConfig,
-          });
 
           const requestStart = Date.now();
-          const generatePromise = model.generateContent(params.prompt);
+
+          // New SDK: Use ai.models.generateContent
+          const generatePromise = ai.models.generateContent({
+            model: modelName,
+            contents: params.prompt,
+            config: {
+              temperature: generationConfig.temperature,
+              topP: generationConfig.topP,
+              maxOutputTokens: generationConfig.maxOutputTokens,
+              responseMimeType: generationConfig.responseMimeType,
+              responseSchema: generationConfig.responseSchema,
+            },
+          });
 
           const result = params.timeoutMs
             ? await Promise.race([
@@ -237,8 +249,10 @@ export function createGeminiAdapter(): ProviderAdapter {
             : await generatePromise;
 
           const latencyMs = Date.now() - requestStart;
-          const geminiResponse = (result as any).response;
-          const response = geminiResponse?.text?.();
+          const geminiResponse = result as any;
+
+          // New SDK: Access text directly from response
+          const response = geminiResponse?.text;
 
           if (typeof response === 'string' && response.trim().length > 0) {
             const usage = normalizeUsageMetadata(
