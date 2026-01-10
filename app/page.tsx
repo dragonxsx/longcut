@@ -9,6 +9,8 @@ import { extractVideoId } from "@/lib/utils";
 import { toast } from "sonner";
 import { AuthModal } from "@/components/auth-modal";
 import { useModePreference } from "@/lib/hooks/use-mode-preference";
+import { useAuth } from "@/contexts/auth-context";
+import { useSubscription, isProSubscriptionActive } from "@/lib/hooks/use-subscription";
 
 export default function Home() {
   return (
@@ -24,8 +26,19 @@ function HomeContent() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [pendingVideoId, setPendingVideoId] = useState<string | null>(null);
   const [isFeelingLucky, setIsFeelingLucky] = useState(false);
+  const [useAiTranscription, setUseAiTranscription] = useState(false);
   const authPromptHandled = useRef(false);
   const { mode, setMode } = useModePreference();
+  const { user } = useAuth();
+  const { subscriptionStatus, fetchSubscriptionStatus } = useSubscription({ user });
+  const isProUser = isProSubscriptionActive(subscriptionStatus);
+
+  // Fetch subscription status when user is available
+  useEffect(() => {
+    if (user) {
+      void fetchSubscriptionStatus();
+    }
+  }, [user, fetchSubscriptionStatus]);
 
   useEffect(() => {
     if (!searchParams) return;
@@ -142,9 +155,13 @@ function HomeContent() {
       const params = new URLSearchParams();
       params.set("url", url);
 
+      if (useAiTranscription && isProUser) {
+        params.set("aiTranscription", "true");
+      }
+
       router.push(`/analyze/${videoId}?${params.toString()}`);
     },
-    [router]
+    [router, useAiTranscription, isProUser]
   );
 
   const handleFeelingLucky = useCallback(async () => {
@@ -215,6 +232,9 @@ function HomeContent() {
               onModeChange={setMode}
               onFeelingLucky={handleFeelingLucky}
               isFeelingLucky={isFeelingLucky}
+              useAiTranscription={useAiTranscription}
+              onAiTranscriptionChange={setUseAiTranscription}
+              isProUser={isProUser}
             />
 
             <Card className="relative flex w-[425px] max-w-full flex-col gap-2.5 overflow-hidden rounded-[22px] border border-[#f0f1f1] bg-white p-6 text-left shadow-[2px_11px_40.4px_rgba(0,0,0,0.06)]">

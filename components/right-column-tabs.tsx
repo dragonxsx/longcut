@@ -56,6 +56,10 @@ interface RightColumnTabsProps {
     badgeLabel?: string;
     isLoading?: boolean;
   };
+  onRegenerateTranscript?: () => void;
+  canRegenerate?: boolean;
+  transcriptSource?: 'youtube' | 'ai' | null;
+  isRegenerating?: boolean;
 }
 
 export interface RightColumnTabsHandle {
@@ -93,6 +97,10 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
   currentSourceLanguage,
   onRequestExport,
   exportButtonState,
+  onRegenerateTranscript,
+  canRegenerate,
+  transcriptSource,
+  isRegenerating,
 
 }, ref) => {
   const [activeTab, setActiveTab] = useState<"transcript" | "chat" | "notes">("transcript");
@@ -208,6 +216,10 @@ export const RightColumnTabs = forwardRef<RightColumnTabsHandle, RightColumnTabs
             onRequestTranslation={onRequestTranslation}
             onRequestExport={onRequestExport}
             exportButtonState={exportButtonState}
+            onRegenerateTranscript={onRegenerateTranscript}
+            canRegenerate={canRegenerate}
+            transcriptSource={transcriptSource}
+            isRegenerating={isRegenerating}
           />
         </div>
         <div className={cn("absolute inset-0", (activeTab !== "chat" || !showChatTab) && "hidden")}>

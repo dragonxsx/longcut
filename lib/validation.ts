@@ -129,7 +129,8 @@ export const videoAnalysisRequestSchema = z.object({
   includeCandidatePool: z.boolean().optional(),
   excludeTopicKeys: z.array(z.string().min(1).max(500)).optional(),
   summary: z.string().nullable().optional(),
-  suggestedQuestions: z.array(z.string()).nullable().optional()
+  suggestedQuestions: z.array(z.string()).nullable().optional(),
+  transcriptSource: z.enum(['youtube', 'ai']).optional()
 });
 
 export const generateTopicsRequestSchema = z.object({

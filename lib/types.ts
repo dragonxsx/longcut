@@ -51,6 +51,8 @@ export interface TopicCandidate {
 
 export type TopicGenerationMode = 'smart' | 'fast';
 
+export type TranscriptSource = 'youtube' | 'ai';
+
 export interface VideoData {
   videoId: string;
   title: string;

@@ -191,6 +191,8 @@ export default function AnalyzePage() {
   const isCachedQuery = cachedParamValue === 'true' || cachedParamValue === '1';
   const regenParam = searchParams?.get('regen');
   const forceRegenerate = (regenParam?.toLowerCase() === '1' || regenParam?.toLowerCase() === 'true');
+  const aiTranscriptionParam = searchParams?.get('aiTranscription');
+  const preferAiTranscription = aiTranscriptionParam?.toLowerCase() === 'true';
   const authErrorParam = searchParams?.get('auth_error');
   const slugParam = searchParams?.get('slug') ?? null;
   const [pageState, setPageState] = useState<PageState>(() =>
@@ -273,6 +275,8 @@ export default function AnalyzePage() {
   const [showTranscriptionProgress, setShowTranscriptionProgress] = useState(false);
   const [pendingTranscriptionVideoId, setPendingTranscriptionVideoId] = useState<string | null>(null);
   const [transcriptionIsLoading, setTranscriptionIsLoading] = useState(false);
+  const [transcriptSource, setTranscriptSource] = useState<'youtube' | 'ai' | null>(null);
+  const [isRegeneratingTranscript, setIsRegeneratingTranscript] = useState(false);
 
   // Use custom hooks for translation
   const {
@@ -767,6 +771,7 @@ export default function AnalyzePage() {
 
               // Load all cached data
               setTranscript(sanitizedTranscript);
+              setTranscriptSource(cacheData.transcriptSource ?? 'youtube');
 
               const cachedVideoInfo = cacheData.videoInfo ?? null;
               if (cachedVideoInfo) {
@@ -961,6 +966,65 @@ export default function AnalyzePage() {
         return;
       }
 
+      // Handle AI transcription preference - skip normal transcript flow
+      if (preferAiTranscription && user && subscriptionStatus?.tier === 'pro') {
+        setPageState('ANALYZING_NEW');
+        setLoadingStage('fetching');
+
+        // Fetch only video info (not transcript)
+        const videoInfoController = abortManager.current.createController('videoInfo', 100000);
+        const videoInfoRes = await fetch("/api/video-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+          signal: videoInfoController.signal,
+        }).catch(err => {
+          console.error("Failed to fetch video info:", err);
+          return null;
+        });
+
+        if (videoInfoRes && videoInfoRes.ok) {
+          try {
+            const videoInfoData = await videoInfoRes.json();
+            if (videoInfoData && !videoInfoData.error) {
+              setVideoInfo(videoInfoData);
+              const rawDuration = videoInfoData?.duration;
+              const numericDuration =
+                typeof rawDuration === "number"
+                  ? rawDuration
+                  : typeof rawDuration === "string"
+                    ? Number(rawDuration)
+                    : null;
+              if (numericDuration && !Number.isNaN(numericDuration) && numericDuration > 0) {
+                setVideoDuration(numericDuration);
+              }
+            }
+          } catch (error) {
+            console.error("Failed to parse video info:", error);
+          }
+        }
+
+        // Check transcription credits before showing prompt
+        const usageData = await fetchTranscriptionUsage();
+        const videoInfoForCheck = videoInfo ?? (videoInfoRes ? await videoInfoRes.clone?.()?.json?.()?.catch(() => null) : null);
+        const videoDurationMinutes = videoInfoForCheck?.duration
+          ? Math.ceil(Number(videoInfoForCheck.duration) / 60)
+          : 60;
+
+        setPendingTranscriptionVideoId(extractedVideoId);
+
+        if (usageData && usageData.totalRemaining < videoDurationMinutes) {
+          setTranscriptionPromptScenario("credits-exhausted");
+        } else {
+          setTranscriptionPromptScenario("user-choice");
+        }
+
+        setShowTranscriptionPrompt(true);
+        setPageState('IDLE');
+        setLoadingStage(null);
+        return;
+      }
+
       setPageState('ANALYZING_NEW');
       setLoadingStage('fetching');
 
@@ -1107,6 +1171,7 @@ export default function AnalyzePage() {
 
       const normalizedTranscriptData = normalizeTranscript(fetchedTranscript);
       setTranscript(normalizedTranscriptData);
+      setTranscriptSource('youtube');
 
       // Process video info response (optional)
       let fetchedVideoInfo: VideoInfo | null = null;
@@ -1455,7 +1520,10 @@ export default function AnalyzePage() {
     checkGenerationLimit,
     redirectToAuthForLimit,
     subscriptionStatus,
-    fetchTranscriptionUsage
+    fetchTranscriptionUsage,
+    preferAiTranscription,
+    forceRegenerate,
+    videoInfo
   ]);
 
   useEffect(() => {
@@ -1912,11 +1980,13 @@ export default function AnalyzePage() {
   const handleTranscriptionComplete = useCallback((transcriptData: TranscriptSegment[]) => {
     setShowTranscriptionProgress(false);
     setTranscriptionJobId(null);
+    setIsRegeneratingTranscript(false);
 
     if (transcriptData && transcriptData.length > 0) {
       // Set the AI-generated transcript and continue with video analysis
       const normalizedTranscriptData = normalizeTranscript(transcriptData);
       setTranscript(normalizedTranscriptData);
+      setTranscriptSource('ai');
 
       // Trigger the rest of the analysis pipeline with the new transcript
       if (pendingTranscriptionVideoId) {
@@ -1939,7 +2009,8 @@ export default function AnalyzePage() {
                 videoInfo,
                 transcript: normalizedTranscriptData,
                 mode,
-                forceRegenerate: true
+                forceRegenerate: true,
+                transcriptSource: 'ai'
               }),
               signal: topicsController.signal,
             });
@@ -2024,6 +2095,37 @@ export default function AnalyzePage() {
     setShowTranscriptionPrompt(false);
     router.push('/pricing');
   }, [router]);
+
+  // Handler for regenerating transcript using AI (from transcript viewer)
+  const handleRegenerateTranscript = useCallback(async () => {
+    if (!user) {
+      handleAuthRequired();
+      return;
+    }
+
+    if (subscriptionStatus?.tier !== 'pro') {
+      setTranscriptionPromptScenario('not-pro');
+      setShowTranscriptionPrompt(true);
+      return;
+    }
+
+    // Fetch transcription usage to check credits
+    const usageData = await fetchTranscriptionUsage();
+    const videoDurationMinutes = videoDuration ? Math.ceil(videoDuration / 60) : 60;
+
+    if (usageData && usageData.totalRemaining < videoDurationMinutes) {
+      setTranscriptionPromptScenario('credits-exhausted');
+    } else {
+      setTranscriptionPromptScenario('user-choice');
+    }
+
+    setPendingTranscriptionVideoId(videoId);
+    setIsRegeneratingTranscript(true);
+    setShowTranscriptionPrompt(true);
+  }, [user, subscriptionStatus, fetchTranscriptionUsage, videoDuration, videoId, handleAuthRequired]);
+
+  // Determine if user can regenerate transcript (authenticated Pro users)
+  const canRegenerateTranscript = !!user && subscriptionStatus?.tier === 'pro';
 
   return (
     <div className="min-h-screen bg-white pt-12 pb-2">
@@ -2261,6 +2363,10 @@ export default function AnalyzePage() {
                   currentSourceLanguage={videoInfo?.language}
                   onRequestExport={handleRequestExport}
                   exportButtonState={exportButtonState}
+                  onRegenerateTranscript={handleRegenerateTranscript}
+                  canRegenerate={canRegenerateTranscript}
+                  transcriptSource={transcriptSource}
+                  isRegenerating={isRegeneratingTranscript}
                 />
               </div>
             </div>
@@ -2318,7 +2424,12 @@ export default function AnalyzePage() {
       />
       <TranscriptionPrompt
         open={showTranscriptionPrompt}
-        onOpenChange={setShowTranscriptionPrompt}
+        onOpenChange={(open) => {
+          setShowTranscriptionPrompt(open);
+          if (!open) {
+            setIsRegeneratingTranscript(false);
+          }
+        }}
         onGenerate={handleStartTranscription}
         onUpgrade={handleUpgradeForTranscription}
         scenario={transcriptionPromptScenario}

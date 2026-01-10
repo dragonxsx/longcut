@@ -12,7 +12,10 @@ async function handler(req: NextRequest) {
     const {
       videoId,
       summary,
-      suggestedQuestions
+      suggestedQuestions,
+      transcript,
+      topics,
+      transcriptSource
     } = await req.json();
 
     if (!videoId) {
@@ -43,7 +46,10 @@ async function handler(req: NextRequest) {
         p_youtube_id: videoId,
         p_user_id: user.id,
         p_summary: summary ?? null,
-        p_suggested_questions: suggestedQuestions ?? null
+        p_suggested_questions: suggestedQuestions ?? null,
+        p_transcript: transcript ?? null,
+        p_topics: topics ?? null,
+        p_transcript_source: transcriptSource ?? null
       })
       .single<UpdateResult>();
 

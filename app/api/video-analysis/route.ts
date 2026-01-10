@@ -311,7 +311,8 @@ async function handler(req: NextRequest) {
           p_model_used: cachedVideo.model_used,
           p_user_id: user.id,
           p_language: cachedVideo.language || null,
-          p_available_languages: cachedVideo.available_languages || null
+          p_available_languages: cachedVideo.available_languages || null,
+          p_transcript_source: cachedVideo.transcript_source ?? 'youtube'
         });
       }
 
@@ -445,7 +446,8 @@ async function handler(req: NextRequest) {
         p_model_used: modelUsed,
         p_user_id: user?.id || null,
         p_language: videoInfo?.language || null,
-        p_available_languages: videoInfo?.availableLanguages || null
+        p_available_languages: videoInfo?.availableLanguages || null,
+        p_transcript_source: validatedData.transcriptSource ?? 'youtube'
       });
     } catch (saveError) {
       // Log but don't fail the request - user should still see their results

@@ -111,7 +111,8 @@ async function handler(req: NextRequest) {
         summary: cachedVideo.summary,
         suggestedQuestions: cachedVideo.suggested_questions,
         cacheDate: cachedVideo.created_at,
-        ownedByCurrentUser
+        ownedByCurrentUser,
+        transcriptSource: cachedVideo.transcript_source ?? 'youtube'
       });
     }
 

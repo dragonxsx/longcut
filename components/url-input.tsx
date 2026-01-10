@@ -1,14 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, ArrowUp, Link, Sparkles } from "lucide-react";
+import { Loader2, ArrowUp, Link, Sparkles, Mic } from "lucide-react";
 import { extractVideoId } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { ModeSelector } from "@/components/mode-selector";
 import { isGrokProviderOnClient } from "@/lib/ai-providers/client-config";
 import type { TopicGenerationMode } from "@/lib/types";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 
 interface UrlInputProps {
   onSubmit: (url: string) => void;
@@ -17,6 +24,9 @@ interface UrlInputProps {
   onModeChange?: (mode: TopicGenerationMode) => void;
   onFeelingLucky?: () => void | Promise<void>;
   isFeelingLucky?: boolean;
+  useAiTranscription?: boolean;
+  onAiTranscriptionChange?: (enabled: boolean) => void;
+  isProUser?: boolean;
 }
 
 export function UrlInput({
@@ -26,6 +36,9 @@ export function UrlInput({
   onModeChange,
   onFeelingLucky,
   isFeelingLucky = false,
+  useAiTranscription = false,
+  onAiTranscriptionChange,
+  isProUser = false,
 }: UrlInputProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +48,7 @@ export function UrlInput({
   const showModeSelector =
     !forceSmartMode && typeof onModeChange === "function";
   const showFeelingLucky = typeof onFeelingLucky === "function";
+  const showAiTranscription = typeof onAiTranscriptionChange === "function";
   const modeValue: TopicGenerationMode = forceSmartMode
     ? "smart"
     : mode ?? "fast";
@@ -101,6 +115,53 @@ export function UrlInput({
           {/* Bottom row: Mode selector (left) and actions (right) */}
           <div className="flex w-full flex-wrap items-center gap-3">
             {showModeSelector && <ModeSelector value={modeValue} onChange={onModeChange} />}
+            {showAiTranscription && (
+              <TooltipProvider delayDuration={0}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isProUser) {
+                          onAiTranscriptionChange(!useAiTranscription);
+                        }
+                      }}
+                      disabled={isLoading}
+                      className={cn(
+                        "flex items-center gap-2 rounded-lg px-2 py-1.5 text-[14px] font-medium transition-colors",
+                        useAiTranscription && isProUser
+                          ? "text-blue-600"
+                          : "text-[#b3b4b4] hover:text-[#787878]",
+                        !isProUser && "cursor-default opacity-70"
+                      )}
+                    >
+                      <div className="w-5 flex items-center justify-end shrink-0">
+                        <Mic className={cn(
+                          "h-5 w-5",
+                          useAiTranscription && isProUser && "text-blue-600"
+                        )} />
+                      </div>
+                      <span>AI</span>
+                      {!isProUser && (
+                        <Badge
+                          variant="outline"
+                          className="ml-0.5 rounded-full border-blue-200 bg-blue-50 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wide text-blue-700"
+                        >
+                          Pro
+                        </Badge>
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="max-w-[200px]">
+                    <p className="text-xs">
+                      {isProUser
+                        ? "Use AI to transcribe videos without captions"
+                        : "Pro feature: Generate transcripts using AI for videos without captions"}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <div className="ml-auto flex items-center gap-2">
               {showFeelingLucky && (
                 <Button

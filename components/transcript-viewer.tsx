@@ -5,7 +5,7 @@ import { TranscriptSegment, Topic, Citation, TranslationRequestHandler } from "@
 import { getTopicHSLColor, formatDuration } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Eye, EyeOff, ChevronDown, Download, Loader2, Search, ChevronUp, X } from "lucide-react";
+import { Eye, EyeOff, ChevronDown, Download, Loader2, Search, ChevronUp, X, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
@@ -31,6 +31,10 @@ interface TranscriptViewerProps {
     badgeLabel?: string;
     isLoading?: boolean;
   };
+  onRegenerateTranscript?: () => void;
+  canRegenerate?: boolean;
+  transcriptSource?: 'youtube' | 'ai' | null;
+  isRegenerating?: boolean;
 }
 
 export function TranscriptViewer({
@@ -46,6 +50,10 @@ export function TranscriptViewer({
   onRequestTranslation,
   onRequestExport,
   exportButtonState,
+  onRegenerateTranscript,
+  canRegenerate = false,
+  transcriptSource,
+  isRegenerating = false,
 }: TranscriptViewerProps) {
   const highlightedRefs = useRef<(HTMLDivElement | null)[]>([]);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -659,6 +667,19 @@ export function TranscriptViewer({
                       </TooltipContent>
                     </Tooltip>
                   )}
+                  {transcriptSource && (
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[9px] px-1.5 py-0 rounded-full font-medium",
+                        transcriptSource === 'ai'
+                          ? "border-blue-200 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-slate-50 text-slate-600"
+                      )}
+                    >
+                      {transcriptSource === 'ai' ? 'AI' : 'YouTube'}
+                    </Badge>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -736,6 +757,29 @@ export function TranscriptViewer({
                         <p className="text-xs">
                           {exportButtonState?.tooltip ?? "Export transcript"}
                         </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
+                  {onRegenerateTranscript && canRegenerate && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={onRegenerateTranscript}
+                          disabled={isRegenerating}
+                          className="h-6 gap-1.5 rounded-full border-slate-200 text-[11px] shadow-none transition hover:border-slate-300 hover:bg-white/80"
+                        >
+                          {isRegenerating ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Mic className="h-3.5 w-3.5" />
+                          )}
+                          <span>AI Transcribe</span>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="text-xs">Regenerate using AI transcription</p>
                       </TooltipContent>
                     </Tooltip>
                   )}
