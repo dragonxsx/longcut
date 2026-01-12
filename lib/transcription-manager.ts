@@ -64,6 +64,7 @@ export interface TranscriptionUsageStats {
   periodStart: Date;
   periodEnd: Date;
   resetAt: string;
+  isUnlimited?: boolean;
 }
 
 export interface TranscriptionDecision {
@@ -129,10 +130,33 @@ function resolveBillingPeriod(
  */
 export async function getTranscriptionUsageStats(
   userId: string,
-  options?: { client?: DatabaseClient; now?: Date }
+  options?: { client?: DatabaseClient; now?: Date; user?: User }
 ): Promise<TranscriptionUsageStats | null> {
   const supabase = options?.client ?? (await createClient());
   const now = options?.now ?? new Date();
+
+  // Check for unlimited access first
+  const isUnlimited =
+    (options?.user && hasUnlimitedVideoAllowance(options.user)) ||
+    hasUnlimitedVideoAllowanceById(userId);
+
+  if (isUnlimited) {
+    // Return unlimited stats - use large number instead of Infinity for JSON serialization
+    const UNLIMITED_MINUTES = 999999;
+    return {
+      subscriptionMinutes: {
+        used: 0,
+        limit: UNLIMITED_MINUTES,
+        remaining: UNLIMITED_MINUTES,
+      },
+      topupMinutes: 0,
+      totalRemaining: UNLIMITED_MINUTES,
+      periodStart: now,
+      periodEnd: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      resetAt: 'Unlimited',
+      isUnlimited: true,
+    };
+  }
 
   // Get user subscription
   const subscription = await getUserSubscriptionStatus(userId, { client: supabase });

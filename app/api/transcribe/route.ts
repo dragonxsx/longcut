@@ -68,7 +68,11 @@ async function handler(request: NextRequest) {
       );
     }
 
-    if (!durationSeconds || typeof durationSeconds !== 'number' || durationSeconds <= 0) {
+    const parsedDurationSeconds = Number(durationSeconds);
+    if (
+      !Number.isFinite(parsedDurationSeconds) ||
+      parsedDurationSeconds <= 0
+    ) {
       return NextResponse.json(
         {
           success: false,
@@ -78,6 +82,7 @@ async function handler(request: NextRequest) {
         { status: 400 }
       );
     }
+    const normalizedDurationSeconds = Math.ceil(parsedDurationSeconds);
 
     // Check for existing completed transcription
     const completedJob = await getCompletedTranscription(youtubeId, {
@@ -110,7 +115,7 @@ async function handler(request: NextRequest) {
     }
 
     // Calculate estimated minutes (round up to nearest minute)
-    const estimatedMinutes = Math.ceil(durationSeconds / 60);
+    const estimatedMinutes = Math.ceil(normalizedDurationSeconds / 60);
 
     // Check if user can start transcription
     const decision = await canStartTranscription(
@@ -156,13 +161,14 @@ async function handler(request: NextRequest) {
     }
 
     // Create the transcription job
-    const estimatedCost = estimateCostCents(durationSeconds);
+    const estimatedCost = estimateCostCents(normalizedDurationSeconds);
+    const estimatedCostCents = Math.round(estimatedCost);
 
     const createResult = await createTranscriptionJob(user.id, youtubeId, {
       client: supabase,
       videoId: videoId || undefined,
-      durationSeconds,
-      estimatedCostCents: estimatedCost,
+      durationSeconds: normalizedDurationSeconds,
+      estimatedCostCents,
     });
 
     if (!createResult.success) {
@@ -197,8 +203,8 @@ async function handler(request: NextRequest) {
       status: 'pending',
       jobId: createResult.jobId,
       estimatedMinutes,
-      estimatedWaitSeconds: estimateProcessingTime(durationSeconds),
-      estimatedCostCents: estimatedCost,
+      estimatedWaitSeconds: estimateProcessingTime(normalizedDurationSeconds),
+      estimatedCostCents,
       usage: decision.stats
         ? {
             subscriptionMinutes: decision.stats.subscriptionMinutes,

@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { csrfFetch } from '@/lib/csrf-client';
 
 export interface TranscriptionUsage {
   subscriptionMinutes: {
@@ -9,6 +10,7 @@ export interface TranscriptionUsage {
   topupMinutes: number;
   totalRemaining: number;
   resetAt?: string;
+  isUnlimited?: boolean;
 }
 
 interface UseTranscriptionReturn {
@@ -42,16 +44,23 @@ export function useTranscription(): UseTranscriptionReturn {
       }
 
       const data = await response.json();
+      const usagePayload = data?.usage ?? data;
+
+      if (!usagePayload) {
+        setUsage(null);
+        return null;
+      }
 
       const usageData: TranscriptionUsage = {
         subscriptionMinutes: {
-          used: data.subscriptionMinutes?.used ?? 0,
-          limit: data.subscriptionMinutes?.limit ?? 0,
-          remaining: data.subscriptionMinutes?.remaining ?? 0,
+          used: usagePayload.subscriptionMinutes?.used ?? 0,
+          limit: usagePayload.subscriptionMinutes?.limit ?? 0,
+          remaining: usagePayload.subscriptionMinutes?.remaining ?? 0,
         },
-        topupMinutes: data.topupMinutes ?? 0,
-        totalRemaining: data.totalRemaining ?? 0,
-        resetAt: data.resetAt,
+        topupMinutes: usagePayload.topupMinutes ?? 0,
+        totalRemaining: usagePayload.totalRemaining ?? 0,
+        resetAt: usagePayload.resetAt,
+        isUnlimited: usagePayload.isUnlimited ?? data?.isUnlimited ?? false,
       };
 
       setUsage(usageData);
@@ -72,10 +81,9 @@ export function useTranscription(): UseTranscriptionReturn {
     setError(null);
 
     try {
-      const response = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ youtubeId, durationSeconds }),
+      const response = await csrfFetch.post('/api/transcribe', {
+        youtubeId,
+        durationSeconds,
       });
 
       const data = await response.json();
@@ -103,11 +111,7 @@ export function useTranscription(): UseTranscriptionReturn {
 
   const cancelTranscription = useCallback(async (jobId: string): Promise<boolean> => {
     try {
-      const response = await fetch('/api/transcribe/cancel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId }),
-      });
+      const response = await csrfFetch.post('/api/transcribe/cancel', { jobId });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));

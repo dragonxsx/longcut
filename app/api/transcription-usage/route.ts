@@ -54,13 +54,15 @@ async function handler(_request: NextRequest) {
       );
     }
 
-    // Get usage stats
+    // Get usage stats - pass user for unlimited check
     const stats = await getTranscriptionUsageStats(user.id, {
       client: supabase,
+      user,
     });
 
-    // Check if user is Pro
-    const isProUser = stats ? stats.subscriptionMinutes.limit > 0 : false;
+    // Check if user is unlimited or Pro
+    const isUnlimited = stats?.isUnlimited ?? false;
+    const isProUser = isUnlimited || (stats ? stats.subscriptionMinutes.limit > 0 : false);
 
     if (!stats) {
       return NextResponse.json({
@@ -77,6 +79,7 @@ async function handler(_request: NextRequest) {
     return NextResponse.json({
       success: true,
       isProUser,
+      isUnlimited,
       usage: {
         subscriptionMinutes: stats.subscriptionMinutes,
         topupMinutes: stats.topupMinutes,
@@ -84,6 +87,7 @@ async function handler(_request: NextRequest) {
         periodStart: stats.periodStart.toISOString(),
         periodEnd: stats.periodEnd.toISOString(),
         resetAt: stats.resetAt,
+        isUnlimited: stats.isUnlimited,
       },
       limits: {
         pro: TRANSCRIPTION_LIMITS.pro,
