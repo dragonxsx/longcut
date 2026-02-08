@@ -1,13 +1,25 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+
+/**
+ * Properties for the SuggestedQuestions component.
+ */
 interface SuggestedQuestionsProps {
+  /** The list of strings to be displayed as clickable suggestion buttons. */
   questions: string[];
+  /** Callback function executed when a suggestion is clicked. Passes the text and index. */
   onQuestionClick: (question: string, index: number) => void;
+  /** Optional: Indicates if data is currently being fetched. */
   isLoading?: boolean;
+  /** Optional: If true, disables buttons to prevent multiple clicks during an active chat. */
   isChatLoading?: boolean;
 }
 
+/**
+ * Renders a list of suggested prompts for the user to interact with.
+ * Designed to appear at the end of a chat sequence.
+ */
 export function SuggestedQuestions({
   questions,
   onQuestionClick,
